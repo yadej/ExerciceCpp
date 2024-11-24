@@ -9,11 +9,15 @@ TEST(ConstrutorsVector, CheckValues)
     EXPECT_TRUE(vec.empty() ) << " Test is empty";
 }
 
-TEST(PushBackVector, TestValues)
+TEST(PushAndPopBackVector, TestValues)
 {
     yadej::Vector<int> vec = yadej::Vector<int>(4);
     vec.push_back(5);
     EXPECT_EQ(vec[4], 5);
+    EXPECT_EQ(vec.size(), 5);
+    vec.pop_back();
+    vec.pop_back();
+    EXPECT_EQ(vec.size(), 3);
     vec.clear();
     EXPECT_EQ(vec.size(), 0);
     EXPECT_TRUE(vec.empty());

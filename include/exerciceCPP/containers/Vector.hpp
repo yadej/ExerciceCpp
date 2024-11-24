@@ -598,7 +598,7 @@ constexpr Vector<T, Allocator>::iterator Vector<T, Allocator>::insert( const_ite
             *( begin() + i) = *( begin() + i - 1);
         }
 
-        std::allocator_traits<Allocator>::construct(allocator, &m_elements[insert_pos], std::move(value));
+        *( begin() + insert_pos) = std::move(value);
         ++m_current_size;
     }
     return pos;
@@ -645,20 +645,12 @@ constexpr Vector<T, Allocator>::iterator Vector<T, Allocator>::insert( const_ite
 
         // Shift value pos, N-count to pos+count to N-1
         for(size_type i=m_current_size; i > insert_pos + count;++i){
-            std::allocator_traits<Allocator>::destroy(allocator,
-                                                      &m_elements[i]);
-            std::allocator_traits<Allocator>::construct(allocator,
-                                                        &m_elements[i],
-                                                        m_elements[i-count]);
+            *(begin() + i) = *(begin() + i - 1);
         }
         
         // put value in pos, pos+count
         for(size_type i=insert_pos; i < insert_pos + count;++i){
-            std::allocator_traits<Allocator>::destroy(allocator,
-                                                      &m_elements[i]);
-            std::allocator_traits<Allocator>::construct(allocator,
-                                                        &m_elements[i],
-                                                        value);
+            *(begin() + i) = value;
         }
 
         m_current_size += count;
@@ -750,6 +742,7 @@ constexpr void Vector<T, Allocator>::push_back( value_type&& value){
         m_max_size = new_max_size;
     }
     std::allocator_traits<Allocator>::construct(allocator, m_elements + m_current_size, value);
+    ++m_current_size;
 }
 
 template<class T, class Allocator>
