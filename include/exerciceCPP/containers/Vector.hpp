@@ -7,8 +7,14 @@
 #include <stdexcept> 
 #include <bit>  //For bit_ceil
 #include <utility>
+#include <concepts>
+
 namespace yadej {
 
+
+// Add concept to check either the type is a iterator
+template<class Iter>
+concept is_iterator = std::random_access_iterator<Iter>;
 
 template<class T, class Allocator = std::allocator<T>> 
 class Vector {
@@ -28,7 +34,7 @@ public:
     constexpr Vector( const allocator_type& alloc) noexcept;
     Vector( size_type count, const_reference_type value, const allocator_type& alloc = Allocator());
     explicit Vector( size_type count, const allocator_type& alloc = Allocator());
-    template<class InputIt>
+    template<class InputIt> requires is_iterator<InputIt>
     constexpr Vector( InputIt first, InputIt last, const allocator_type& alloc = Allocator());
     constexpr Vector(Vector && other);
     constexpr Vector(const Vector & other) noexcept;
@@ -79,7 +85,7 @@ public:
     constexpr iterator insert( const_iterator pos, const_reference_type value);
     constexpr iterator insert( const_iterator pos, T&& value);
     constexpr iterator insert( const_iterator pos, size_type count, const_reference_type value);
-    template<class InputIt>
+    template<class InputIt> requires is_iterator<InputIt>
     constexpr iterator insert( const_iterator pos, InputIt first, InputIt last);
     constexpr iterator insert( const_iterator pos, std::initializer_list<T> ilist);
     // TODO emplace
@@ -157,7 +163,7 @@ Vector<T,Allocator>::Vector( size_type count, const allocator_type& alloc )
 
 }
 template<class T, class Allocator>
-template<class InputIt>
+template<class InputIt> requires is_iterator<InputIt>
 constexpr Vector<T,Allocator>::Vector( InputIt first, InputIt last, const allocator_type& alloc )
         : allocator(alloc){
     // Get size of the Vector
@@ -521,7 +527,7 @@ constexpr Vector<T, Allocator>::iterator Vector<T, Allocator>::insert( const_ite
         for(size_type i=0; i < insert_pos;++i)
             std::allocator_traits<Allocator>::construct(allocator, &new_element[i], m_elements[i]);
 
-        std::allocator_traits<Allocator>::construct(allocator, &new_element[pos], value);
+        std::allocator_traits<Allocator>::construct(allocator, &new_element[insert_pos], value);
 
         for(size_type i=pos; i < m_current_size; ++i)
             std::allocator_traits<Allocator>::construct(allocator, &new_element[i + 1],m_elements[i]);
@@ -547,6 +553,7 @@ constexpr Vector<T, Allocator>::iterator Vector<T, Allocator>::insert( const_ite
         *pos = value;
         ++m_current_size;
     }
+    return pos;
 }
 
 template<class T, class Allocator>
@@ -567,7 +574,7 @@ constexpr Vector<T, Allocator>::iterator Vector<T, Allocator>::insert( const_ite
         for(size_type i=0; i < insert_pos;++i)
             std::allocator_traits<Allocator>::construct(allocator, &new_element[i], m_elements[i]);
 
-        std::allocator_traits<Allocator>::construct(allocator, &new_element[pos], std::move(value));
+        std::allocator_traits<Allocator>::construct(allocator, &new_element[insert_pos], std::move(value));
 
         for(size_type i=insert_pos; i < m_current_size; ++i)
             std::allocator_traits<Allocator>::construct(allocator, &new_element[i + 1],m_elements[i]);
@@ -588,13 +595,13 @@ constexpr Vector<T, Allocator>::iterator Vector<T, Allocator>::insert( const_ite
 
         // Iteration of N-1 to pos to shift the variable
         for(size_type i=m_current_size - 1; i > insert_pos; --i){
-            std::allocator_traits<Allocator>::destroy(allocator, &m_elements[i]);
-            std::allocator_traits<Allocator>::construct(allocator, &m_elements[i], m_elements[i-1]);
+            *( begin() + i) = *( begin() + i - 1);
         }
 
-        std::allocator_traits<Allocator>::construct(allocator, &m_elements[pos], std::move(value));
+        std::allocator_traits<Allocator>::construct(allocator, &m_elements[insert_pos], std::move(value));
         ++m_current_size;
     }
+    return pos;
 }
 
 template<class T, class Allocator>
@@ -659,9 +666,10 @@ constexpr Vector<T, Allocator>::iterator Vector<T, Allocator>::insert( const_ite
 
 
     }
+    return pos;
 }
 template<class T, class Allocator>
-template<class InputIt>
+template<class InputIt> requires is_iterator<InputIt>
 constexpr Vector<T, Allocator>::iterator Vector<T, Allocator>::insert( const_iterator pos, InputIt first, InputIt last){
 
 
@@ -695,12 +703,13 @@ constexpr Vector<T, Allocator>::iterator Vector<T, Allocator>::insert( const_ite
     m_current_size += size_insert;
     m_max_size = std::bit_ceil(m_current_size);
     new_element = nullptr;
-
+    return pos;
 }
 
 template<class T, class Allocator>
 constexpr Vector<T, Allocator>::iterator Vector<T, Allocator>::insert( const_iterator pos, std::initializer_list<T> ilist){
     insert(pos, ilist.begin(), ilist.end());
+    return pos;
 }
 
 template<class T, class Allocator>
