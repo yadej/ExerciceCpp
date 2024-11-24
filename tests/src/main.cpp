@@ -31,6 +31,15 @@ TEST(InsertVector, TestPosition)
     EXPECT_EQ(3, vec[3]);
     EXPECT_EQ(5, vec[1]);
     EXPECT_EQ(vec.size(), 6);
+    int new_value = 8;
+    vec.insert(vec.begin() + 2, new_value);
+    EXPECT_EQ(vec[2], 8);
+    EXPECT_EQ(vec[4], 3);
+    yadej::Vector<int> vec2 = yadej::Vector<int>(2, 2);
+    vec.insert( vec.begin() + 5, vec2.begin(), vec2.begin() + 2);
+    EXPECT_EQ(vec[5], 2);
+    EXPECT_EQ(vec[6], 2);
+
 }
 
 

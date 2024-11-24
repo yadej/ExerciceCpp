@@ -62,9 +62,8 @@ public:
     //
     class iterator;
     using const_iterator = const iterator;
-
     constexpr iterator begin();
-    constexpr const iterator begin() const noexcept;
+    constexpr const_iterator begin() const noexcept;
     constexpr iterator end();
     constexpr const_iterator end() const noexcept;
     constexpr const_iterator cbegin() const noexcept;
@@ -299,7 +298,7 @@ constexpr const T* Vector<T, Allocator>::data() const{
 }
 
 template<class T, class Allocator>
-class Vector<T, Allocator>::iterator{
+class Vector<T, Allocator>::iterator {
     public:
     using iterator_category = std::random_access_iterator_tag;
     using difference_type = Vector<T, Allocator>::difference_type;
@@ -313,7 +312,8 @@ class Vector<T, Allocator>::iterator{
     iterator( pointer_type it): m_curr(it){
     }
 
-    iterator operator++(){
+
+    iterator& operator++(){
         ++m_curr;
         return *this;
     }
@@ -323,7 +323,7 @@ class Vector<T, Allocator>::iterator{
         return temp;
     }
     
-    iterator operator--(){
+    iterator& operator--(){
         --m_curr;
         return *this;
     }
@@ -529,7 +529,7 @@ constexpr Vector<T, Allocator>::iterator Vector<T, Allocator>::insert( const_ite
 
         std::allocator_traits<Allocator>::construct(allocator, &new_element[insert_pos], value);
 
-        for(size_type i=pos; i < m_current_size; ++i)
+        for(size_type i=insert_pos; i < m_current_size; ++i)
             std::allocator_traits<Allocator>::construct(allocator, &new_element[i + 1],m_elements[i]);
 
         destroy_elements(begin(), end());
