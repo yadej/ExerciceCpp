@@ -6,8 +6,8 @@
 #include <memory> // ptrdiff_t
 #include <stdexcept> 
 #include <bit>  //For bit_ceil
+#include <type_traits>
 #include <utility>
-#include <concepts>
 
 namespace yadej {
 
@@ -15,6 +15,12 @@ namespace yadej {
 // Add concept to check either the type is a iterator
 template<class Iter>
 concept is_iterator = std::random_access_iterator<Iter>;
+
+template<typename T>
+concept can_use_move_copy = std::is_move_assignable_v<T>
+                    && std::is_move_constructible_v<T>
+                    && std::is_copy_assignable_v<T>
+                    && std::is_copy_constructible_v<T>;
 
 template<class T, class Allocator = std::allocator<T>> 
 class Vector {
@@ -38,6 +44,7 @@ public:
     constexpr Vector( InputIt first, InputIt last, const allocator_type& alloc = Allocator());
     constexpr Vector(Vector && other);
     constexpr Vector(const Vector & other) noexcept;
+    constexpr Vector( std::initializer_list<T> init, const Allocator& alloc = Allocator());
     constexpr Vector &operator=(Vector &&);
     constexpr Vector &operator=(const Vector &);
     constexpr ~Vector();
@@ -80,7 +87,7 @@ public:
     
     // Modifier
     constexpr void clear() noexcept;
-    // TODO insert
+
     constexpr iterator insert( const_iterator pos, const_reference_type value);
     constexpr iterator insert( const_iterator pos, T&& value);
     constexpr iterator insert( const_iterator pos, size_type count, const_reference_type value);
@@ -89,7 +96,7 @@ public:
     constexpr iterator insert( const_iterator pos, std::initializer_list<T> ilist);
     // TODO emplace
     template<class... Args>
-    constexpr void emplace( const_iterator pos, Args&&... args);
+    constexpr iterator emplace( const_iterator pos, Args&&... args);
     // TODO erase
     constexpr void erase( const_iterator pos);
     constexpr void erase( const_iterator first, const_iterator last);
@@ -184,7 +191,8 @@ template<class T, class Allocator>
 constexpr Vector<T,Allocator>::Vector(Vector && other)
         : m_current_size(other.m_current_size), 
           m_max_size(other.m_max_size),
-          m_elements(std::move(other.m_elements)){
+          m_elements(std::move(other.m_elements)),
+          allocator(other.allocator){
     other.m_elements = nullptr;
     other.m_max_size = 0;
     other.m_current_size = 0;
@@ -195,9 +203,27 @@ constexpr Vector<T, Allocator>::Vector(const Vector & other) noexcept
             : m_current_size(other.m_current_size),
               m_max_size(other.m_max_size){
     try {
-        std::allocator_traits<Allocator>::allocate(allocator, m_max_size);
+        m_elements = std::allocator_traits<Allocator>::allocate(allocator, m_max_size);
         for(size_type i=0; i < m_current_size; ++i)
             std::allocator_traits<Allocator>::construct(allocator, m_elements + i, other.m_elements[i]);
+    }catch(...){
+        destroy_elements(begin(), end());
+        deallocate_elements(m_elements);
+        throw;
+    }
+}
+
+template<class T, class Allocator>
+constexpr Vector<T, Allocator>::Vector(std::initializer_list<T> init, const Allocator& alloc)
+    : m_current_size( init.size()), 
+      m_max_size( std::bit_ceil( init.size())), 
+      allocator( alloc){
+    
+    try {
+        m_elements = std::allocator_traits<Allocator>::allocate(allocator, m_max_size);
+        auto copy = init.begin();
+        for(size_type i=0 ;i < m_current_size; ++i, ++copy)
+            std::allocator_traits<Allocator>::construct(allocator, m_elements + i, *copy); 
     }catch(...){
         destroy_elements(begin(), end());
         deallocate_elements(m_elements);
@@ -701,6 +727,58 @@ constexpr Vector<T, Allocator>::iterator Vector<T, Allocator>::insert( const_ite
 template<class T, class Allocator>
 constexpr Vector<T, Allocator>::iterator Vector<T, Allocator>::insert( const_iterator pos, std::initializer_list<T> ilist){
     insert(pos, ilist.begin(), ilist.end());
+    return pos;
+}
+
+template<class T, class Allocator>
+template<class... Args>
+constexpr Vector<T, Allocator>::iterator Vector<T, Allocator>::emplace( const_iterator pos, Args&&... args){
+
+     // Check if pos is inside the container
+    // Since our iterator is random access iterator
+    // We have comparator to test
+    if( pos < begin() || end() < pos)
+        throw std::invalid_argument("insert position not in container");
+
+    difference_type insert_pos = std::distance(begin(), pos);
+    
+    if( m_current_size == m_max_size){
+        pointer_type new_element = std::allocator_traits<Allocator>::allocate(allocator,
+                                                                              std::bit_ceil(m_max_size + 1));
+
+        for(size_type i=0; i < insert_pos;++i)
+            std::allocator_traits<Allocator>::construct(allocator, &new_element[i], m_elements[i]);
+
+        std::allocator_traits<Allocator>::construct(allocator,
+                                                    &new_element[insert_pos], 
+                                                    new T(std::forward<T>(args)...));
+
+        for(size_type i=insert_pos; i < m_current_size; ++i)
+            std::allocator_traits<Allocator>::construct(allocator, &new_element[i + 1],m_elements[i]);
+
+        destroy_elements(begin(), end());
+        deallocate_elements(m_elements);
+
+        m_elements = new_element;
+        ++m_current_size;
+        m_max_size = std::bit_ceil(m_current_size);
+        new_element = nullptr;
+    } else {
+        // We allocate the last one as N - 1 to up the iteration 
+        // to be able to put value inside
+        std::allocator_traits<Allocator>::construct(allocator,
+                                                    &m_elements[m_current_size],
+                                                    m_elements[m_current_size - 1]);
+
+        // Iteration of N-1 to pos to shift the variable
+        for(size_type i=m_current_size - 1; i > insert_pos; --i){
+            *( begin() + i) = *( begin() + i - 1);
+        }
+
+        *( begin() + insert_pos) = new T(std::forward<T>(args)...);
+        ++m_current_size;
+    }
+    
     return pos;
 }
 

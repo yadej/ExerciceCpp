@@ -1,12 +1,25 @@
 #include "exerciceCPP/containers/Vector.hpp"
 #include <gtest/gtest.h>
-
+#include <initializer_list>
 
 TEST(ConstrutorsVector, CheckValues)
 {
     yadej::Vector<int> vec = yadej::Vector<int>();
     ASSERT_EQ(vec.size(), 0) << "I hope it is ok";
     EXPECT_TRUE(vec.empty() ) << " Test is empty";
+
+    std::initializer_list<int> std_vec = { 3, 3, 3};
+    yadej::Vector<int> copy_std_vec = yadej::Vector<int>(std_vec);
+    ASSERT_EQ(copy_std_vec.size(), 3);
+    ASSERT_EQ(copy_std_vec[1], 3);
+    yadej::Vector<int> copy_copy_vec = yadej::Vector<int>(copy_std_vec);
+    ASSERT_EQ(copy_copy_vec.size(), 3);
+    ASSERT_EQ(copy_copy_vec[1], 3);
+    yadej::Vector<int> move_vec = yadej::Vector<int>(copy_copy_vec);
+
+    ASSERT_EQ(move_vec.size(), 3);
+    ASSERT_EQ(move_vec[1], 3);
+
 }
 
 TEST(PushAndPopBackVector, TestValues)
