@@ -1,13 +1,13 @@
 #pragma once
 
-#include <cstddef> 
+#include <cstddef> // size_t ptrdiff_t  
 #include <iterator> // random_access_iterator_tag
-#include <limits> // 
+#include <limits> // numeric_limits -> max
 #include <memory> // ptrdiff_t
-#include <stdexcept> 
+#include <stdexcept> // invalid_argument 
 #include <bit>  //For bit_ceil
-#include <type_traits>
-#include <utility>
+#include <type_traits> // is_constructible_v
+#include <utility> // forward move 
 
 namespace yadej {
 
@@ -16,7 +16,16 @@ namespace yadej {
 template<class Iter>
 concept is_iterator = std::random_access_iterator<Iter>;
 
-template<typename T>
+
+template<class T>
+concept default_construction = std::is_default_constructible_v<T>;
+
+//Well most function has either 
+// a MoveInsertable
+// or a CopyInsertable
+// or a MoveAssignable
+// or a CopyAssignable
+template<class T>
 concept can_use_move_copy = std::is_move_assignable_v<T>
                     && std::is_move_constructible_v<T>
                     && std::is_copy_assignable_v<T>
@@ -44,7 +53,7 @@ public:
     constexpr Vector( InputIt first, InputIt last, const allocator_type& alloc = Allocator());
     constexpr Vector(Vector && other);
     constexpr Vector(const Vector & other) noexcept;
-    constexpr Vector( std::initializer_list<T> init, const Allocator& alloc = Allocator());
+    constexpr Vector( std::initializer_list<T> init, const allocator_type& alloc = Allocator());
     constexpr Vector &operator=(Vector &&);
     constexpr Vector &operator=(const Vector &);
     constexpr ~Vector();
@@ -122,7 +131,8 @@ private:
 
 template<class T, class Allocator>
 constexpr Vector<T, Allocator>::Vector() noexcept(noexcept(Allocator()))
-        : m_elements(nullptr), m_current_size{0}, m_max_size{0}{
+        : m_elements(nullptr), m_current_size{0}, m_max_size{0},
+          allocator(Allocator()){
 }
 
 template<class T, class Allocator>
@@ -136,7 +146,8 @@ Vector<T,Allocator>::Vector( size_type count,
                             const_reference_type value, 
                             const allocator_type& alloc )
                     : m_current_size(count),
-                      m_max_size(std::bit_ceil(count)){
+                      m_max_size(std::bit_ceil(count)),
+                      allocator(alloc){
     try {
         m_elements = std::allocator_traits<Allocator>::allocate(allocator, m_max_size);
         for (size_type i=0; i < count; ++i)
@@ -201,7 +212,8 @@ constexpr Vector<T,Allocator>::Vector(Vector && other)
 template<class T, class Allocator>
 constexpr Vector<T, Allocator>::Vector(const Vector & other) noexcept 
             : m_current_size(other.m_current_size),
-              m_max_size(other.m_max_size){
+              m_max_size(other.m_max_size),
+              allocator(other.allocator){
     try {
         m_elements = std::allocator_traits<Allocator>::allocate(allocator, m_max_size);
         for(size_type i=0; i < m_current_size; ++i)
@@ -236,6 +248,7 @@ constexpr Vector<T, Allocator>& Vector<T, Allocator>::operator=(Vector<T, Alloca
     m_current_size = other.m_current_size;
     m_max_size = other.m_max_size;
     m_elements = std::move(other.m_elements);
+    allocator = other.allocator;
     other.m_elements = nullptr;
     other.m_max_size = 0;
     other.m_current_size = 0;
@@ -246,6 +259,7 @@ template<class T, class Allocator>
 constexpr Vector<T,Allocator>& Vector<T, Allocator>::operator=(const Vector<T, Allocator>& other){
     m_current_size =  other.m_current_size;
     m_max_size = other.m_max_size;
+    allocator = other.allocator;
     try {
         m_elements = std::allocator_traits<Allocator>::allocate(allocator, m_max_size);
         for(size_type i=0; i < m_current_size; ++i)
@@ -484,6 +498,8 @@ constexpr std::size_t Vector<T, Allocator>::max_size() const noexcept{
 
 template<class T, class Allocator>
 constexpr void Vector<T, Allocator>::reserve(const size_type new_cap){
+    if (new_cap > max_size())
+        throw std::length_error(" The new cap exceed the absolute maximum size");
     if (new_cap <= m_max_size) 
         return;
 
@@ -495,7 +511,7 @@ constexpr void Vector<T, Allocator>::reserve(const size_type new_cap){
     destroy_elements(begin(), end());
     deallocate_elements( m_elements);
 
-    m_elements = std::move(new_element);
+    m_elements = new_element;
 
     m_max_size = new_cap;
 
@@ -864,38 +880,32 @@ constexpr void Vector<T, Allocator>::resize(size_type count){
 
     if( count < m_current_size){
         Vector<T, Allocator>::iterator begin_destroyed_element = begin();
-        for(size_type i=0; i < count - m_current_size - 1;++i)
-            ++begin_destroyed_element;
-        destroy_elements(begin_destroyed_element, end());
-        return;
+        destroy_elements(begin_destroyed_element+count, end());
+    } else if( count > m_current_size && count < m_max_size){
+        for(size_type i=m_current_size; i < count; ++i)
+            std::allocator_traits<Allocator>::construct(allocator, m_elements + i, T());
+    }else{
+
+        // Last possibility count > size and count > capacity 
+        // So that we need some reallocation
+        size_type new_max_size = std::bit_ceil(count);
+        pointer_type new_elements = std::allocator_traits<Allocator>::allocate(allocator, new_max_size);
+
+        for(size_type i=0; i < m_current_size; ++i)
+            std::allocator_traits<Allocator>::construct(allocator, &new_elements[i], m_elements[i]);
+
+        for(size_type i=m_current_size; i < count; ++i)
+            std::allocator_traits<Allocator>::construct(allocator, &new_elements[i], T());
+
+
+        destroy_elements(begin(), end());
+        deallocate_elements(m_elements);
+
+        m_elements = std::move(new_elements);
+        //new_elements = nullptr;
+        m_max_size = new_max_size;
     }
-
-    if( count > m_current_size && count < m_max_size){
-        for(size_type i=m_current_size;m_current_size < count; ++i)
-            std::allocator_traits<Allocator>::construct(allocator, &m_elements[i], T());
-
-        return;
-    }
-
-    // Last possibility count > size and count > capacity 
-    // So that we need some reallocation
-    size_type new_max_size = std::bit_ceil(count);
-    pointer_type new_elements = std::allocator_traits<Allocator>::allocate(allocator, new_max_size);
-
-    for(size_type i=0; i < m_current_size; ++i)
-        std::allocator_traits<Allocator>::construct(allocator, &new_elements[i], m_elements[i]);
-
-    for(size_type i=m_current_size;m_current_size < count; ++i)
-        std::allocator_traits<Allocator>::construct(allocator, &new_elements[i], T());
-
-
-    destroy_elements(begin(), end());
-    deallocate_elements(m_elements);
-
-    m_elements = std::move(new_elements);
-    new_elements = nullptr;
-    m_max_size = new_max_size;
-
+    m_current_size = count;
 }
 
 template<class T, class Allocator>
@@ -905,37 +915,32 @@ constexpr void Vector<T, Allocator>::resize(size_type count, const_reference_typ
 
     if( count < m_current_size){
         Vector<T, Allocator>::iterator begin_destroyed_element = begin();
-        for(size_type i=0; i < count - m_current_size - 1;++i)
-            ++begin_destroyed_element;
-        destroy_elements(begin_destroyed_element, end());
-        return;
-    }
-
-    if( count > m_current_size && count < m_max_size){
+        destroy_elements(begin_destroyed_element+count, end());
+    } else if( count > m_current_size && count < m_max_size){
         
-        for(size_type i=m_current_size;m_current_size < count; ++i)
+        for(size_type i=m_current_size; i < count; ++i)
             std::allocator_traits<Allocator>::construct(allocator, &m_elements[i], value);
-        return;
+    } else {
+
+        // Last possibility count > size and count > capacity 
+        // So that we need some reallocation
+        size_type new_max_size = std::bit_ceil(count);
+        pointer_type new_elements = std::allocator_traits<Allocator>::allocate(allocator, new_max_size);
+
+        for(size_type i=0; i < m_current_size; ++i)
+            std::allocator_traits<Allocator>::construct(allocator, &new_elements[i], m_elements[i]);
+
+        for(size_type i=m_current_size; i < count; ++i)
+            std::allocator_traits<Allocator>::construct(allocator, &new_elements[i], value);
+
+        destroy_elements(begin(), end());
+        deallocate_elements(m_elements);
+
+        m_elements = std::move(new_elements);
+        //new_elements = nullptr;
+        m_max_size = new_max_size;
     }
-
-    // Last possibility count > size and count > capacity 
-    // So that we need some reallocation
-    size_type new_max_size = std::bit_ceil(count);
-    pointer_type new_elements = std::allocator_traits<Allocator>::allocate(allocator, new_max_size);
-
-    for(size_type i=0; i < m_current_size; ++i)
-        std::allocator_traits<Allocator>::construct(allocator, &new_elements[i], m_elements[i]);
-
-    for(size_type i=m_current_size;m_current_size < count; ++i)
-        std::allocator_traits<Allocator>::construct(allocator, &new_elements[i], value);
-
-    destroy_elements(begin(), end());
-    deallocate_elements(m_elements);
-
-    m_elements = std::move(new_elements);
-    new_elements = nullptr;
-    m_max_size = new_max_size;
-
+    m_current_size = count;
 }
 
 template<class T, class Allocator>

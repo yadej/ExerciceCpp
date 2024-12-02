@@ -55,6 +55,29 @@ TEST(InsertVector, TestPosition)
 
 }
 
+TEST(SizeTestVector, TestSize)
+{
+    yadej::Vector<int> vec = yadej::Vector<int>(5, 5);
+    EXPECT_EQ(vec.size(), 5);
+    vec.resize(4);
+    EXPECT_EQ(vec.size(), 4);
+    vec.resize(7);
+    EXPECT_EQ(vec.size(), 7);
+    vec.resize(10);
+    EXPECT_EQ(vec.size(), 10);
+    
+    yadej::Vector<int> vec2 = yadej::Vector<int>();
+    vec2.reserve(50);
+    
+    EXPECT_EQ(vec2.capacity(), 50);
+    for(int i=0; i < 5; ++i){
+        vec2.push_back(5);
+    }
+    vec2.shrink_to_fit();
+    EXPECT_EQ(vec2.size(), 5);
+    
+   
+}
 
 
 int main(int argc, char **argv)
