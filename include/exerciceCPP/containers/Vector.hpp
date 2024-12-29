@@ -31,6 +31,8 @@ concept can_use_move_copy = std::is_move_assignable_v<T>
                     && std::is_copy_assignable_v<T>
                     && std::is_copy_constructible_v<T>;
 
+// TODO: Add the requirement for all function when needed
+
 template<class T, class Allocator = std::allocator<T>> 
 class Vector {
 public:
@@ -103,7 +105,6 @@ public:
     template<class InputIt> requires is_iterator<InputIt>
     constexpr iterator insert( const_iterator pos, InputIt first, InputIt last);
     constexpr iterator insert( const_iterator pos, std::initializer_list<T> ilist);
-    // TODO emplace
     template<class... Args>
     constexpr iterator emplace( const_iterator pos, Args&&... args);
     // TODO erase
@@ -114,7 +115,6 @@ public:
     constexpr void push_back( value_type&& value);
     template<class... Args>
     constexpr reference_type emplace_back( Args&&... args);
-    // TODO append range
     constexpr void pop_back();
     constexpr void resize(size_type count);
     constexpr void resize(size_type count, const_reference_type value);
@@ -247,9 +247,9 @@ template<class T, class Allocator>
 constexpr Vector<T, Allocator>& Vector<T, Allocator>::operator=(Vector<T, Allocator> && other){
     m_current_size = other.m_current_size;
     m_max_size = other.m_max_size;
-    m_elements = std::move(other.m_elements);
+    m_elements = other.m_elements;
     allocator = other.allocator;
-    other.m_elements = nullptr;
+    //other.m_elements = nullptr;
     other.m_max_size = 0;
     other.m_current_size = 0;
     return *this;
@@ -302,11 +302,11 @@ constexpr const T& Vector<T, Allocator>::at(size_type position) const{
 
 template<class T, class Allocator>
 constexpr T& Vector<T, Allocator>::operator[](size_type position){
-    return at(position);
+    return m_elements[position];
 }
 template<class T, class Allocator>
 constexpr const T& Vector<T, Allocator>::operator[](size_type position) const{
-    return at(position);
+    return m_elements[position];
 }
 
 template<class T, class Allocator>
@@ -796,6 +796,34 @@ constexpr Vector<T, Allocator>::iterator Vector<T, Allocator>::emplace( const_it
     }
     
     return pos;
+}
+
+template<class T, class Allocator>
+constexpr void Vector<T, Allocator>::erase( Vector<T, Allocator>::iterator pos){
+    if( pos < begin() || pos > end())
+        return;
+    
+    difference_type erase_pos = std::distance(begin(), pos);
+    for( size_type i=erase_pos; i < m_current_size; ++i){
+        *( begin() + i) = *( begin() + i + 1);
+    }
+    destroy_elements(end()-1, end());
+    m_current_size--;
+}
+
+template<class T, class Allocator>
+constexpr void Vector<T, Allocator>::erase( Vector<T, Allocator>::iterator first,
+                                            Vector<T, Allocator>::iterator last){
+    if( first < begin() || first > end() || first < begin() || last > end())
+        return;
+    difference_type erase_pos = std::distance(begin(), first);
+    difference_type end_pos = std::distance(first, last);
+    for( size_type i=erase_pos; i < m_current_size - end_pos; ++i){
+        *( begin() + i) = *( begin() + i + end_pos);
+    }
+    destroy_elements(end()-end_pos, end());
+    m_current_size -= end_pos;
+
 }
 
 template<class T, class Allocator>

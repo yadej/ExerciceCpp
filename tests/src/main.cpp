@@ -55,6 +55,20 @@ TEST(InsertVector, TestPosition)
 
 }
 
+TEST(EraseVector, TestVector)
+{
+    yadej::Vector<int> vec = yadej::Vector<int>(5, 5);
+    for(int i=0; i<5; ++i){
+        vec[i] = i;
+    }
+    for(int i=0; i<5; ++i){
+        EXPECT_EQ(vec[i], i);
+    }
+
+    vec.erase(vec.begin() + 2);
+    EXPECT_EQ(vec[2], 3);
+}
+
 TEST(SizeTestVector, TestSize)
 {
     yadej::Vector<int> vec = yadej::Vector<int>(5, 5);
@@ -74,7 +88,7 @@ TEST(SizeTestVector, TestSize)
         vec2.push_back(5);
     }
     vec2.shrink_to_fit();
-    EXPECT_EQ(vec2.size(), 5);
+    EXPECT_EQ(vec2.capacity(), 5);
     
    
 }
