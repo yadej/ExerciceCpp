@@ -8,6 +8,7 @@
 #include <bit>  //For bit_ceil
 #include <type_traits> // is_constructible_v
 #include <utility> // forward move 
+#include "Iterator.hpp"
 
 namespace yadej {
 
@@ -42,14 +43,14 @@ public:
     using allocator_type = Allocator;
     using size_type = std::size_t;
     using difference_type = std::ptrdiff_t;
-    using reference_type = T&;
-    using const_reference_type = const T&;
-    using pointer_type = T*;
-    using const_pointer_type = const T*;
+    using reference = T&;
+    using const_reference = const T&;
+    using pointer = T*;
+    using const_pointer = const T*;
    // Constructors and Destructors 
     constexpr Vector() noexcept(noexcept(Allocator()));
     constexpr Vector( const allocator_type& alloc) noexcept;
-    Vector( size_type count, const_reference_type value, const allocator_type& alloc = Allocator());
+    Vector( size_type count, const_reference value, const allocator_type& alloc = Allocator());
     explicit Vector( size_type count, const allocator_type& alloc = Allocator());
     template<class InputIt> requires is_iterator<InputIt>
     constexpr Vector( InputIt first, InputIt last, const allocator_type& alloc = Allocator());
@@ -61,25 +62,25 @@ public:
     constexpr ~Vector();
 
     // Element access
-    constexpr reference_type at(size_type position);
-    constexpr const_reference_type at(size_type position) const;
+    constexpr reference at(size_type position);
+    constexpr const_reference at(size_type position) const;
 
-    constexpr reference_type operator[](size_type position);
-    constexpr const_reference_type operator[](size_type position) const;
+    constexpr reference operator[](size_type position);
+    constexpr const_reference operator[](size_type position) const;
 
-    constexpr reference_type front();
-    constexpr const_reference_type front() const;
+    constexpr reference front();
+    constexpr const_reference front() const;
 
-    constexpr reference_type back();
-    constexpr const_reference_type back() const;
+    constexpr reference back();
+    constexpr const_reference back() const;
 
-    constexpr pointer_type data();
-    constexpr const_pointer_type data() const;
+    constexpr pointer data();
+    constexpr const_pointer data() const;
 
     // iterator
     //
-    class iterator;
-    using const_iterator = const iterator;
+    using iterator = iterator_base<T>;
+    using const_iterator = const iterator_base<T>;
     constexpr iterator begin();
     constexpr const_iterator begin() const noexcept;
     constexpr iterator end();
@@ -99,9 +100,9 @@ public:
     // Modifier
     constexpr void clear() noexcept;
 
-    constexpr iterator insert( const_iterator pos, const_reference_type value);
+    constexpr iterator insert( const_iterator pos, const_reference value);
     constexpr iterator insert( const_iterator pos, T&& value);
-    constexpr iterator insert( const_iterator pos, size_type count, const_reference_type value);
+    constexpr iterator insert( const_iterator pos, size_type count, const_reference value);
     template<class InputIt> requires is_iterator<InputIt>
     constexpr iterator insert( const_iterator pos, InputIt first, InputIt last);
     constexpr iterator insert( const_iterator pos, std::initializer_list<T> ilist);
@@ -111,22 +112,22 @@ public:
     constexpr void erase( const_iterator pos);
     constexpr void erase( const_iterator first, const_iterator last);
 
-    constexpr void push_back( const_reference_type value);
+    constexpr void push_back( const_reference value);
     constexpr void push_back( value_type&& value);
     template<class... Args>
-    constexpr reference_type emplace_back( Args&&... args);
+    constexpr reference emplace_back( Args&&... args);
     constexpr void pop_back();
     constexpr void resize(size_type count);
-    constexpr void resize(size_type count, const_reference_type value);
+    constexpr void resize(size_type count, const_reference value);
     // TODO swap
     // TODO Do Some operator
 private:
-    pointer_type m_elements=nullptr;
+    pointer m_elements=nullptr;
     size_type m_current_size{0};
     size_type m_max_size{0};
     Allocator allocator{};
     void destroy_elements(iterator first, iterator last);
-    void deallocate_elements(pointer_type elements);
+    void deallocate_elements(pointer elements);
 };
 
 template<class T, class Allocator>
@@ -143,7 +144,7 @@ constexpr Vector<T, Allocator>::Vector( const allocator_type& alloc) noexcept
 
 template<class T, class Allocator>
 Vector<T,Allocator>::Vector( size_type count, 
-                            const_reference_type value, 
+                            const_reference value, 
                             const allocator_type& alloc )
                     : m_current_size(count),
                       m_max_size(std::bit_ceil(count)),
@@ -221,7 +222,7 @@ constexpr Vector<T, Allocator>::Vector(const Vector & other) noexcept
     }catch(...){
         destroy_elements(begin(), end());
         deallocate_elements(m_elements);
-        throw;
+        //throw;
     }
 }
 
@@ -338,120 +339,6 @@ constexpr const T* Vector<T, Allocator>::data() const{
 }
 
 template<class T, class Allocator>
-class Vector<T, Allocator>::iterator {
-    public:
-    using iterator_category = std::random_access_iterator_tag;
-    using difference_type = Vector<T, Allocator>::difference_type;
-    using value_type = Vector<T, Allocator>::value_type;
-    using pointer = Vector<T, Allocator>::pointer_type;
-    using reference = Vector<T, Allocator>::reference_type;
-
-    iterator(): m_curr(nullptr){
-    }
-
-    iterator( pointer_type it): m_curr(it){
-    }
-
-
-    iterator& operator++(){
-        ++m_curr;
-        return *this;
-    }
-    iterator operator++(int){
-        iterator temp = *this;
-        ++m_curr;
-        return temp;
-    }
-    
-    iterator& operator--(){
-        --m_curr;
-        return *this;
-    }
-    iterator operator--(int){
-        iterator temp = *this;
-        --m_curr;
-        return temp;
-    }
-    
-    iterator& operator+=(difference_type n){
-        m_curr += n;
-        return *this;
-    }
-
-    iterator& operator-=(difference_type n){
-        m_curr -= n;
-        return *this;
-    }
-
-    reference_type operator*() const {
-        return *m_curr;
-    }
-
-    pointer_type operator->() const {
-        return m_curr;
-    }
-    
-    reference_type operator[](difference_type n) const {
-        return *(m_curr + n);
-    }
-
-    pointer_type get() const {
-        return m_curr;
-    }
-
-    friend bool operator==(const iterator& l_arg, const iterator& r_arg){
-        return l_arg.m_curr == r_arg.m_curr;
-    }
-
-    friend bool operator!=(const iterator& l_arg, const iterator& r_arg){
-        return !(l_arg == r_arg);
-    }
-
-    friend bool operator<(const iterator& l_arg, const iterator& r_arg){
-        return l_arg.m_curr < r_arg.m_curr;
-    }
-
-    friend bool operator>(const iterator& l_arg, const iterator& r_arg){
-        return r_arg < l_arg;
-    }
-
-    friend bool operator>=(const iterator& l_arg, const iterator& r_arg){
-        return !(l_arg< r_arg);
-    }
-
-    friend bool operator<=(const iterator& l_arg, const iterator& r_arg){
-        return !(r_arg < l_arg);
-    }
-
-    friend iterator operator+(const iterator& it, difference_type n){
-        iterator temp = it;
-        temp += n;
-        return temp;
-    }
-
-    friend iterator operator+(difference_type n, const iterator& it){
-        return it + n;
-    }
-
-    friend iterator operator-(const iterator& it, difference_type n){
-        iterator temp = it;
-        temp -= n;
-        return temp;
-    }
-    
-    friend iterator operator-(difference_type n, const iterator& it){
-        return it - n;
-    }
-
-    friend difference_type operator-(const iterator& l_arg, const iterator& r_arg){
-        return l_arg.m_curr - r_arg.m_curr;
-    }
-
-private:
-    pointer_type m_curr{nullptr};
-};
-
-template<class T, class Allocator>
 constexpr Vector<T, Allocator>::iterator Vector<T, Allocator>::begin(){
     return Vector<T, Allocator>::iterator(m_elements);
 }
@@ -503,7 +390,7 @@ constexpr void Vector<T, Allocator>::reserve(const size_type new_cap){
     if (new_cap <= m_max_size) 
         return;
 
-    pointer_type new_element = std::allocator_traits<Allocator>::allocate(allocator, new_cap);
+    pointer new_element = std::allocator_traits<Allocator>::allocate(allocator, new_cap);
 
     for(size_type i=0; i < m_current_size; ++i)
         std::allocator_traits<Allocator>::construct(allocator,new_element+i, m_elements[i]);
@@ -525,7 +412,7 @@ constexpr std::size_t Vector<T, Allocator>::capacity() const noexcept{
 
 template<class T, class Allocator>
 constexpr void Vector<T, Allocator>::shrink_to_fit(){
-    pointer_type new_elements = std::move( m_elements);
+    pointer new_elements = std::move( m_elements);
     try { 
         m_elements = std::allocator_traits<Allocator>::allocate(allocator, m_current_size);
     }catch(...){
@@ -554,7 +441,7 @@ constexpr void Vector<T, Allocator>::clear() noexcept{
 
 template<class T, class Allocator>
 constexpr Vector<T, Allocator>::iterator Vector<T, Allocator>::insert( const_iterator pos,
-                                                                      const_reference_type value){
+                                                                      const_reference value){
     // Check if pos is inside the container
     // Since our iterator is random access iterator
     // We have comparator to test
@@ -563,7 +450,7 @@ constexpr Vector<T, Allocator>::iterator Vector<T, Allocator>::insert( const_ite
 
     difference_type insert_pos = std::distance(begin(), pos);
     if( m_current_size  == m_max_size) {
-        pointer_type new_element = std::allocator_traits<Allocator>::allocate(allocator,
+        pointer new_element = std::allocator_traits<Allocator>::allocate(allocator,
                                                                               std::bit_ceil(m_current_size + 1));
 
         for(size_type i=0; i < insert_pos;++i)
@@ -610,7 +497,7 @@ constexpr Vector<T, Allocator>::iterator Vector<T, Allocator>::insert( const_ite
     difference_type insert_pos = std::distance(begin(), pos);
     
     if( m_current_size == m_max_size){
-        pointer_type new_element = std::allocator_traits<Allocator>::allocate(allocator,
+        pointer new_element = std::allocator_traits<Allocator>::allocate(allocator,
                                                                               std::bit_ceil(m_max_size + 1));
 
         for(size_type i=0; i < insert_pos;++i)
@@ -647,7 +534,7 @@ constexpr Vector<T, Allocator>::iterator Vector<T, Allocator>::insert( const_ite
 }
 
 template<class T, class Allocator>
-constexpr Vector<T, Allocator>::iterator Vector<T, Allocator>::insert( const_iterator pos, size_type count, const_reference_type value){
+constexpr Vector<T, Allocator>::iterator Vector<T, Allocator>::insert( const_iterator pos, size_type count, const_reference value){
 
     // Check if pos is inside the container
     // Since our iterator is random access iterator
@@ -658,7 +545,7 @@ constexpr Vector<T, Allocator>::iterator Vector<T, Allocator>::insert( const_ite
     difference_type insert_pos = std::distance(begin(), pos);
     
     if( m_current_size + count > m_max_size){
-        pointer_type new_element = std::allocator_traits<Allocator>::allocate(allocator,
+        pointer new_element = std::allocator_traits<Allocator>::allocate(allocator,
                                                                               std::bit_ceil(m_current_size + count));
 
         for(size_type i=0; i < insert_pos;++i)
@@ -716,7 +603,7 @@ constexpr Vector<T, Allocator>::iterator Vector<T, Allocator>::insert( const_ite
     difference_type insert_pos = std::distance(begin(), pos);
     difference_type size_insert = std::distance(first, last);
 
-    pointer_type new_element = std::allocator_traits<Allocator>::allocate(allocator,
+    pointer new_element = std::allocator_traits<Allocator>::allocate(allocator,
                                                                           std::bit_ceil(m_current_size + size_insert+ 1));
 
     for(size_type i=0; i < insert_pos;++i)
@@ -759,7 +646,7 @@ constexpr Vector<T, Allocator>::iterator Vector<T, Allocator>::emplace( const_it
     difference_type insert_pos = std::distance(begin(), pos);
     
     if( m_current_size == m_max_size){
-        pointer_type new_element = std::allocator_traits<Allocator>::allocate(allocator,
+        pointer new_element = std::allocator_traits<Allocator>::allocate(allocator,
                                                                               std::bit_ceil(m_max_size + 1));
 
         for(size_type i=0; i < insert_pos;++i)
@@ -827,10 +714,10 @@ constexpr void Vector<T, Allocator>::erase( Vector<T, Allocator>::iterator first
 }
 
 template<class T, class Allocator>
-constexpr void Vector<T, Allocator>::push_back( const_reference_type value){
+constexpr void Vector<T, Allocator>::push_back( const_reference value){
     if( m_current_size == m_max_size){
         size_type new_max_size = std::bit_ceil(m_max_size +1);
-        pointer_type new_elements = std::allocator_traits<Allocator>::allocate(allocator, new_max_size);
+        pointer new_elements = std::allocator_traits<Allocator>::allocate(allocator, new_max_size);
 
         for(size_type i=0; i < m_max_size; ++i)
             std::allocator_traits<Allocator>::construct(allocator, &new_elements[i], m_elements[i]);
@@ -851,7 +738,7 @@ template<class T, class Allocator>
 constexpr void Vector<T, Allocator>::push_back( value_type&& value){
     if( m_current_size == m_max_size){
         size_type new_max_size = std::bit_ceil(m_max_size +1);
-        pointer_type new_elements = std::allocator_traits<Allocator>::allocate(allocator, new_max_size);
+        pointer new_elements = std::allocator_traits<Allocator>::allocate(allocator, new_max_size);
 
         for(size_type i=0; i < m_max_size; ++i)
             std::allocator_traits<Allocator>::construct(allocator, &new_elements[i], m_elements[i]);
@@ -872,7 +759,7 @@ template<class... Args>
 constexpr T& Vector<T, Allocator>::emplace_back(Args&&... args){
      if( m_current_size == m_max_size){
         size_type new_max_size = std::bit_ceil(m_max_size +1);
-        pointer_type new_elements = std::allocator_traits<Allocator>::allocate(allocator, new_max_size);
+        pointer new_elements = std::allocator_traits<Allocator>::allocate(allocator, new_max_size);
 
         for(size_type i=0; i < m_max_size; ++i)
             std::allocator_traits<Allocator>::construct(allocator, &new_elements[i], m_elements[i]);
@@ -885,7 +772,7 @@ constexpr T& Vector<T, Allocator>::emplace_back(Args&&... args){
         m_max_size = new_max_size;
     }
     // Make the allocation
-    reference_type new_element = new T(std::forward<Args>(args)...);
+    reference new_element = new T(std::forward<Args>(args)...);
     std::allocator_traits<Allocator>::construct(allocator, &new_element[m_current_size],new_element);
     ++m_current_size;
     return new_element;
@@ -917,7 +804,7 @@ constexpr void Vector<T, Allocator>::resize(size_type count){
         // Last possibility count > size and count > capacity 
         // So that we need some reallocation
         size_type new_max_size = std::bit_ceil(count);
-        pointer_type new_elements = std::allocator_traits<Allocator>::allocate(allocator, new_max_size);
+        pointer new_elements = std::allocator_traits<Allocator>::allocate(allocator, new_max_size);
 
         for(size_type i=0; i < m_current_size; ++i)
             std::allocator_traits<Allocator>::construct(allocator, &new_elements[i], m_elements[i]);
@@ -937,7 +824,7 @@ constexpr void Vector<T, Allocator>::resize(size_type count){
 }
 
 template<class T, class Allocator>
-constexpr void Vector<T, Allocator>::resize(size_type count, const_reference_type value) {
+constexpr void Vector<T, Allocator>::resize(size_type count, const_reference value) {
     if( count == m_current_size)
         return;
 
@@ -953,7 +840,7 @@ constexpr void Vector<T, Allocator>::resize(size_type count, const_reference_typ
         // Last possibility count > size and count > capacity 
         // So that we need some reallocation
         size_type new_max_size = std::bit_ceil(count);
-        pointer_type new_elements = std::allocator_traits<Allocator>::allocate(allocator, new_max_size);
+        pointer new_elements = std::allocator_traits<Allocator>::allocate(allocator, new_max_size);
 
         for(size_type i=0; i < m_current_size; ++i)
             std::allocator_traits<Allocator>::construct(allocator, &new_elements[i], m_elements[i]);
@@ -980,7 +867,7 @@ void Vector<T, Allocator>::destroy_elements(Vector<T, Allocator>::iterator first
 }
 
 template<class T, class Allocator>
-void Vector<T, Allocator>::deallocate_elements(pointer_type elements){
+void Vector<T, Allocator>::deallocate_elements(pointer elements){
     if(m_max_size == 0)
         return;
 
